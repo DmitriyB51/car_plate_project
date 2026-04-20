@@ -1,6 +1,6 @@
 # Dataset (too large for git)
-dataset/images/
-dataset/annotations.json
+dataset/ocr/images
+dataset/ocr/annotations.json
 
 # Model checkpoints (large binary files)
 checkpoints/

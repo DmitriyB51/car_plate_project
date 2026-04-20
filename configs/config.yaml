@@ -3,9 +3,9 @@ model:
   max_target_length: 20
 
 dataset:
-  root: "dataset"
-  annotations_file: "dataset/annotations.json"
-  images_dir: "dataset/images"
+  root: "dataset/ocr"
+  annotations_file: "dataset/ocr/annotations.json"
+  images_dir: "dataset/ocr/images"
   train_split: 0.80
   val_split: 0.10
   test_split: 0.10
@@ -13,7 +13,7 @@ dataset:
 
 training:
   output_dir: "checkpoints"
-  num_epochs: 10
+  num_epochs: 3
   batch_size: 2
   gradient_accumulation_steps: 8
   learning_rate: 5.0e-5

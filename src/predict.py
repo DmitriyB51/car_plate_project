@@ -32,10 +32,17 @@ class LicensePlatePredictor:
 
     def __init__(self, checkpoint_path: str, num_beams: int = 4, max_new_tokens: int = 20):
         print(f"[Predictor] Loading model from: {checkpoint_path}")
-        self.processor = TrOCRProcessor.from_pretrained(checkpoint_path)
-        self.model = VisionEncoderDecoderModel.from_pretrained(checkpoint_path)
+
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+
+        # Processor берем из базовой модели TrOCR
+        self.processor = TrOCRProcessor.from_pretrained("microsoft/trocr-small-printed")
+
+        # Веса модели берем из обученного checkpoint
+        self.model = VisionEncoderDecoderModel.from_pretrained(checkpoint_path).to(self.device)
         self.model.eval()
-        self.num_beams     = num_beams
+
+        self.num_beams = num_beams
         self.max_new_tokens = max_new_tokens
         print("[Predictor] Ready.")
 
@@ -58,17 +65,17 @@ class LicensePlatePredictor:
 
         pixel_values = self.processor(
             images=image, return_tensors="pt"
-        ).pixel_values
+        ).pixel_values.to(self.device)
 
         with torch.no_grad():
             generated_ids = self.model.generate(
                 pixel_values,
-                num_beams      = self.num_beams,
-                max_new_tokens = self.max_new_tokens,
-                early_stopping = True,
+                num_beams=self.num_beams,
+                max_new_tokens=self.max_new_tokens,
+                early_stopping=True,
             )
 
-        text = self.processor.tokenizer.batch_decode(
+        text = self.processor.batch_decode(
             generated_ids, skip_special_tokens=True
         )[0]
         return text.strip().upper()
@@ -78,17 +85,17 @@ class LicensePlatePredictor:
         images = [Image.open(p).convert("RGB") for p in image_paths]
         pixel_values = self.processor(
             images=images, return_tensors="pt"
-        ).pixel_values
+        ).pixel_values.to(self.device)
 
         with torch.no_grad():
             generated_ids = self.model.generate(
                 pixel_values,
-                num_beams      = self.num_beams,
-                max_new_tokens = self.max_new_tokens,
-                early_stopping = True,
+                num_beams=self.num_beams,
+                max_new_tokens=self.max_new_tokens,
+                early_stopping=True,
             )
 
-        texts = self.processor.tokenizer.batch_decode(
+        texts = self.processor.batch_decode(
             generated_ids, skip_special_tokens=True
         )
         return [t.strip().upper() for t in texts]

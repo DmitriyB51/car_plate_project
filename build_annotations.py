@@ -1,3 +1,4 @@
+%%writefile build_annotations.py
 import os
 import json
 
@@ -8,7 +9,6 @@ OUTPUT_JSON = os.path.join(PROJECT_DATASET, "annotations.json")
 
 annotations = {}
 
-# определяем реальные расширения файлов в dataset/images
 image_files = set(os.listdir(IMAGES_DIR))
 
 for split in ["train", "val", "test"]:
@@ -26,7 +26,6 @@ for split in ["train", "val", "test"]:
         name = data["name"]
         text = data["description"].strip().upper()
 
-        # ищем реальный файл изображения
         possible_names = [
             f"{name}.png",
             f"{name}.jpg",

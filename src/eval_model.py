@@ -1,10 +1,5 @@
 """
-evaluate.py - Detailed evaluation of a trained TrOCR checkpoint
-
-Usage:
-    python src/evaluate.py
-    python src/evaluate.py --config configs/config.yaml
-    python src/evaluate.py --checkpoint checkpoints/best_model --num_samples 20
+eval_model.py - Detailed evaluation of a trained TrOCR checkpoint
 """
 
 import argparse
@@ -38,18 +33,19 @@ def run_evaluation(
     num_beams: int = 4,
     num_samples_to_print: int = 10,
 ) -> dict:
-    """
-    Evaluate model on a dataset split using beam search.
-    Returns dict with cer, exact_acc, predictions, ground_truths.
-    """
     model.eval()
     model.to(torch.device("cpu"))
 
     cer_metric = hf_evaluate.load("cer")
-    loader = DataLoader(dataset, batch_size=2, shuffle=False,
-                        num_workers=0, pin_memory=False)
+    loader = DataLoader(
+        dataset,
+        batch_size=2,
+        shuffle=False,
+        num_workers=0,
+        pin_memory=False,
+    )
 
-    all_preds  = []
+    all_preds = []
     all_labels = []
 
     print(f"[Evaluate] {len(dataset)} samples, beam_size={num_beams}")
@@ -57,16 +53,16 @@ def run_evaluation(
     with torch.no_grad():
         for batch in tqdm(loader, desc="Evaluating"):
             pixel_values = batch["pixel_values"]
-            label_ids    = batch["labels"]
+            label_ids = batch["labels"]
 
             generated_ids = model.generate(
                 pixel_values,
-                num_beams      = num_beams,
-                max_new_tokens = config["model"]["max_target_length"],
-                early_stopping = True,
+                num_beams=num_beams,
+                max_new_tokens=config["model"]["max_target_length"],
+                early_stopping=True,
             )
 
-            pred_strs = processor.tokenizer.batch_decode(
+            pred_strs = processor.batch_decode(
                 generated_ids, skip_special_tokens=True
             )
 
@@ -75,7 +71,7 @@ def run_evaluation(
                 label_ids.numpy(),
                 processor.tokenizer.pad_token_id,
             )
-            gt_strs = processor.tokenizer.batch_decode(
+            gt_strs = processor.batch_decode(
                 label_ids_clean, skip_special_tokens=True
             )
 
@@ -109,34 +105,52 @@ def main(config_path: str, checkpoint_path: str = None, num_samples: int = 10):
     config = load_config(config_path)
 
     if checkpoint_path is None:
-        checkpoint_path = str(PROJECT_ROOT / config["inference"]["checkpoint_path"])
+        checkpoint_path = PROJECT_ROOT / config["inference"]["checkpoint_path"]
+    else:
+        checkpoint_path = Path(checkpoint_path)
+
+    if not checkpoint_path.exists():
+        checkpoints_dir = PROJECT_ROOT / "checkpoints"
+        checkpoint_folders = sorted(
+            [p for p in checkpoints_dir.glob("checkpoint-*") if p.is_dir()],
+            key=lambda p: int(p.name.split("-")[-1])
+        )
+        if checkpoint_folders:
+            checkpoint_path = checkpoint_folders[-1]
+            print(f"[Evaluate] Falling back to latest checkpoint: {checkpoint_path}")
+        else:
+            raise FileNotFoundError(f"No valid checkpoint found: {checkpoint_path}")
 
     print(f"[Evaluate] Loading checkpoint: {checkpoint_path}")
-    processor = TrOCRProcessor.from_pretrained(checkpoint_path)
-    model     = VisionEncoderDecoderModel.from_pretrained(checkpoint_path)
 
-    # Use the same random_seed as training to guarantee the test split is identical
+    # Processor always from base model
+    processor = TrOCRProcessor.from_pretrained("microsoft/trocr-small-printed")
+    model = VisionEncoderDecoderModel.from_pretrained(checkpoint_path)
+
     _, _, test_ds = build_datasets(
-        annotations_file  = str(PROJECT_ROOT / config["dataset"]["annotations_file"]),
-        images_dir        = str(PROJECT_ROOT / config["dataset"]["images_dir"]),
-        processor         = processor,
-        train_ratio       = config["dataset"]["train_split"],
-        val_ratio         = config["dataset"]["val_split"],
-        random_seed       = config["dataset"]["random_seed"],
-        max_target_length = config["model"]["max_target_length"],
+        annotations_file=str(PROJECT_ROOT / config["dataset"]["annotations_file"]),
+        images_dir=str(PROJECT_ROOT / config["dataset"]["images_dir"]),
+        processor=processor,
+        train_ratio=config["dataset"]["train_split"],
+        val_ratio=config["dataset"]["val_split"],
+        random_seed=config["dataset"]["random_seed"],
+        max_target_length=config["model"]["max_target_length"],
     )
 
     run_evaluation(
-        model, processor, test_ds, config,
-        num_beams            = config["inference"]["num_beams"],
-        num_samples_to_print = num_samples,
+        model,
+        processor,
+        test_ds,
+        config,
+        num_beams=config["inference"]["num_beams"],
+        num_samples_to_print=num_samples,
     )
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Evaluate TrOCR checkpoint")
-    parser.add_argument("--config",      type=str, default="configs/config.yaml")
-    parser.add_argument("--checkpoint",  type=str, default=None)
+    parser.add_argument("--config", type=str, default="configs/config.yaml")
+    parser.add_argument("--checkpoint", type=str, default=None)
     parser.add_argument("--num_samples", type=int, default=10,
                         help="Number of sample predictions to print")
     args = parser.parse_args()
